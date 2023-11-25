@@ -2,7 +2,9 @@
 #include <cmath>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
-
+#include <tf2>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 bool get_component_wise_pose_error(const geometry_msgs::msg::PoseStamped::SharedPtr pose_1, 
                                    const geometry_msgs::msg::PoseStamped::SharedPtr pose_2,
                                    ComponentWiseCartesianDifference &error)
@@ -41,7 +43,27 @@ bool transform_pose(const geometry_msgs::msg::PoseStamped::SharedPtr reference_p
                     const geometry_msgs::msg::PoseStamped::SharedPtr target_pose, 
                     geometry_msgs::msg::PoseStamped::SharedPtr transform_pose)
 {
-    return false;
+    try
+        {
+            rclcpp::Time common_time = tf_buffer_->getLatestCommonTime(
+                target_pose.header.frame_id, reference_pose.header.frame_id);
+
+            tf_buffer_->waitForTransform(
+                target_pose.header.frame_id, reference_pose.header.frame_id,
+                common_time, rclcpp::Duration::from_seconds(wait_for_transform_));
+
+            geometry_msgs::msg::PoseStamped transformed_pose;
+            tf2::doTransform(target_pose, transformed_pose,
+                             tf_buffer_->lookupTransform(
+                                 reference_pose.header.frame_id, target_pose.header.frame_id, common_time));
+
+            return transformed_pose;
+        }
+    catch (tf2::TransformException& ex)
+        {
+            RCLCPP_WARN(rclcpp::get_logger("YourClass"), "Transform failed: %s", ex.what());
+            return geometry_msgs::msg::PoseStamped();  // or you can return a special value to indicate failure
+        }
 }
 
 //offset not added
